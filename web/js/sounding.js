@@ -16,12 +16,12 @@ const MOTIVATION = "oa-motivation"
 function loadHash() {
     let params = getParams(window.location.href)
     let hash = window.location.hash.substr(1)
-    changeObject(hash)
+    changeObject(hash || "http://devstore.rerum.io/v1/id/5c1414fae4b05b14fb531ed5")
     canvasView.innerText = hash
 }
 
 main.addEventListener('filed-annotation', function(event) {
-    if (event.target_object === objectDescription.getAttribute("deep-id")) {
+    if (event.target_object === objectDescription.getAttribute("sounding-id")) {
         renderObjectDescription(SCREEN.canvas)
     }
 })
@@ -31,19 +31,19 @@ function render(obj = {}) {
     switch (obj["@type"]) {
         case "sc:Canvas":
             SCREEN.canvas = obj
-            canvasView.setAttribute("deep-id", obj["@id"])
-            objectDescription.setAttribute("deep-id", obj["@id"])
+            canvasView.setAttribute("sounding-id", obj["@id"])
+            objectDescription.setAttribute("sounding-id", obj["@id"])
             renderCanvasImage(SCREEN.canvas)
             break
         case "sc:Manifest":
             SCREEN.manifest = obj
-            manifestNav.setAttribute("deep-id", obj["@id"])
+            manifestNav.setAttribute("sounding-id", obj["@id"])
             renderManifest(SCREEN.manifest)
             let presi = (obj["@context"] && obj["@context"].indexOf("/3/context.json") > -1) ? 3 : 2
             SCREEN.canvas = (presi === 3) ?
                 fromIdInArray(SCREEN.manifest.start.id, SCREEN.manifest.items) || SCREEN.manifest.items[0] :
                 fromIdInArray(SCREEN.manifest.startCanvas, SCREEN.manifest.sequences[0].canvases) || SCREEN.manifest.sequences[0].canvases[0]
-			objectDescription.setAttribute("deep-id",SCREEN.canvas["@id"]||SCREEN.canvas.id||"")
+			objectDescription.setAttribute("sounding-id",SCREEN.canvas["@id"]||SCREEN.canvas.id||"")
 			let canvasList = (presi === 3) ? SCREEN.manifest.items : SCREEN.manifest.sequences[0].canvases
             SCREEN.promises.push(canvasList)
             aggregateAnnotations()
@@ -69,13 +69,13 @@ function render(obj = {}) {
 }
 /**
  * Observer callback for rendering newly loaded objects. Checks the
- * mutationsList for "deep-object" attribute changes.
+ * mutationsList for "sounding-object" attribute changes.
  * @param {Array} mutationsList of MutationRecord objects
  */
 async function newObjectRender(mutationsList) {
     for (var mutation of mutationsList) {
-        if (mutation.attributeName === "deep-id") {
-            let id = mutation.target.getAttribute("deep-id")
+        if (mutation.attributeName === "sounding-id") {
+            let id = mutation.target.getAttribute("sounding-id")
             let obj = {}
             try {
                 obj = JSON.parse(localStorage.getItem(id))
@@ -227,20 +227,20 @@ function fileAnnotation(annotation) {
 }
 
 async function renderObjectDescription(object) {
-    let tmplData = `<h2>${object.label || "[ unlabeled ]"}</h2>`
+    let tmplData = `<h2>${object.label || object.name || "[ unlabeled ]"}</h2>`
     let presi = (object["@context"] && object["@context"].indexOf("/3/context.json") > -1) ? 3 : 2
     tmplData += object.metadata ? `<dl>${object.metadata.reduce((a,b)=>a+=`<dt>${b.label}</dt><dd>${getValue(b)}</dd>`,``)}</dl>` : ``
 
-	for (let key in SCREEN.targets[objectDescription.getAttribute("deep-id")]) {
+	for (let key in SCREEN.targets[objectDescription.getAttribute("sounding-id")]) {
 		// categories expected: description, commentary, classification, links, tags
 		tmplData += `<h3>${key}</h3>
 		<dl class="meta-${key}">`
-		for (let id of SCREEN.targets[objectDescription.getAttribute("deep-id")][key]) {
+		for (let id of SCREEN.targets[objectDescription.getAttribute("sounding-id")][key]) {
 			let annotations = SCREEN.annotations[id].body
 			if(!Array.isArray(annotations)) { annotations = [annotations] }
 			for(let i in annotations) {
 				for(let k in annotations[i]) {
-					let label = annotations[i][k].label || annotations[i][k].type || annotations[i][k]['@type'] || annotations[i][k].name || annotations[i][k].title || k
+					let label = annotations[i][k].label ||annotations[i][k].name || annotations[i][k].type || annotations[i][k]['@type'] || annotations[i][k].name || annotations[i][k].title || k
 				let value = getValue(annotations[i][k])
 				tmplData += `<dt>${label}</dt><dd>${value}</dd>`
 			}
@@ -274,7 +274,7 @@ function renderCanvasImage(canvas) {
 }
 
 function changeObject(newId) {
-	main.setAttribute("deep-id", newId)
+	main.setAttribute("sounding-id", newId)
 }
 
 function renderManifest(manifest = {}) {
@@ -300,7 +300,7 @@ function renderManifest(manifest = {}) {
 function saveAnnotations(event){
 	event.preventDefault()
 	let dirtyFields = []
-	for (let elem of event.target.querySelectorAll("textarea, input")) {
+	for (let elem of event.target.querySelectorAll("textarea, input, select")) {
 		if (elem.$isDirty) {
 			dirtyFields.push(elem)
 		}
@@ -320,13 +320,13 @@ function saveAnnotations(event){
 				"@context": "http://www.w3.org/ns/anno.jsonld",
 				"@type": "Annotation",
 				"motivation": motivation,
-				"target": objectDescription.getAttribute("deep-id"),
+				"target": objectDescription.getAttribute("sounding-id"),
 				"body": {}
 			}
 		}
 		options.body.body[annoKey] = {
 			value: elem.value,
-			evidence: canvasView.getAttribute("deep-id")
+			evidence: canvasView.getAttribute("sounding-id")
 		}
 		if (source) {
 			options.body["@id"] = source
@@ -342,7 +342,7 @@ function saveAnnotations(event){
 			.then(function(newState) {
 				localStorage.setItem(newState["@id"], JSON.stringify(newState.new_obj_state))
 				let obj = {}
-				let id = objectDescription.getAttribute("deep-id")
+				let id = objectDescription.getAttribute("sounding-id")
 				try {
 					obj = JSON.parse(localStorage.getItem(id))
 				} catch (err) {}
@@ -393,9 +393,9 @@ function formField(field,noLabel) {
 					tmpl+=`</div>`
 	} else {
 	switch (field.options.type) {
-		// memo, text, number, email, url, tel, range, date, month, week, time, datetime, color
+		// memo, text, number, email, url, tel, range, date, month, week, time, datetime, color, select
 		case "memo":
-		tmpl += `<textarea at-type="${field.type}"${field.options.required ? ` required="true"` : ``}>${field.default_value}</textarea>`
+		tmpl += `<textarea at-type="${field.type}"${field.options.required ? ` required="true"` : ``}>${field.default_value||''}</textarea>`
 		break
 		case "number":
 		case "email":
@@ -408,14 +408,18 @@ function formField(field,noLabel) {
 		case "time":
 		case "datetime":
 		case "color":
-		tmpl += `<input type="${field.options.type}" ${MOTIVATION}="${field.motivation}" ${KEYS}="${field.type}"${field.options.required ? ` required="true"` : null} value="${field.default_value}">`
+		tmpl += `<input type="${field.options.type}" ${MOTIVATION}="${field.motivation}" ${KEYS}="${field.type}"${field.options.required ? ` required="true"` : null} value="${field.default_value||''}">`
+		break
+		case "select":
+	tmpl += `<select ${field.options.multiple && `multiple=true`}>${field.options.optionElements.reduce((a,b)=>a+=(`<option value="${b.value}">${b.label}</option>`),``)}</select>
+	<small>(CTRL to select multiple) </small>`
 		break
 		default:
-				tmpl += `<input type="text" ${MOTIVATION}="${field.motivation}" ${KEYS}="${field.type}"${field.options.required ? ` required="true"` : ``} value="${field.default_value}">`
+				tmpl += `<input type="text" ${MOTIVATION}="${field.motivation}" ${KEYS}="${field.type}"${field.options.required ? ` required="true"` : ``} value="${field.default_value||''}">`
 			}
-			if(field.options.helptext){
-				tmpl+=`<small>${field.options.helptext}</small>`
-			}
+		if(field.options.helptext){
+			tmpl+=`<small>${field.options.helptext}</small>`
+		}
 	}
 	return tmpl
 }
